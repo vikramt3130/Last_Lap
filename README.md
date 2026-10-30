@@ -1,6 +1,6 @@
-﻿# Last Lap
+# Shoal
 
-A fast room-code party runner for 2–8 players. Runs in a browser on desktop and mobile; the Node server serves the game and relays live player positions over WebSockets.
+An always-open, room-code-free multiplayer fish game. Swim through a large bounded sea, eat smaller fish to grow, avoid larger players, and respawn small if you get eaten. The visible ocean area is roughly twice its previous size. AI fish continuously replenish.
 
 ## Run locally
 
@@ -10,23 +10,22 @@ Requires Node.js 20 or newer.
 npm start
 ```
 
-The server prints the URL it chose. If port 3000 is busy, it automatically tries 3001 through 3010. Open the printed URL in Chrome. To play across devices on the same network, open the computer's LAN address on each phone or laptop and allow inbound traffic on the printed port.
+Open http://localhost:3000. Each ocean holds up to 10 players; new players are automatically routed to the least-full ocean. The leaderboard is live and there is no match end.
 
-## Deploy publicly
+## Deploy
 
-This app needs a Node host that supports persistent WebSocket connections. It is not a static-site-only app.
+This app uses a persistent WebSocket connection, so deploy as a Render web service, not a static site. The included render.yaml is a Render Blueprint. On the free plan, each process is a single small instance; the 10-player ocean cap is a cautious starting target and needs load testing before increasing.
 
-The included `render.yaml` can be used as a Render Blueprint. Push this folder to a GitHub repository, then create a new Blueprint in Render from that repository. Render will build the Node service and provide a public HTTPS URL; rooms work across devices on that URL. For other hosts, set the start command to `npm start` and provide the assigned `PORT`.
+## Controls
 
-## How to play
+- Desktop: WASD / arrow keys, or point the mouse in the direction you want to swim.
+- Touch: drag the joystick at the lower left.
+- Eat fish clearly smaller than you. You can gulp other players only when you are substantially larger.
+- Getting eaten resets your growth. You respawn after a short delay with temporary protection.
 
-Create a room and share its six-character code or invite link. The host starts with at least two players. Run automatically, use left/right to change pace, jump over gaps, grapple to nearby glowing anchors, and slide under low gantries. The camera follows the front runner; falling behind the left screen edge or into a gap eliminates you. Last racer standing scores 5 points, second scores 3, third scores 2, and other finishers score 1. After three rounds, the highest total wins.
+## Files
 
-Keyboard: A/D or ←/→ move, Space jumps, W or ↑ grapples near an anchor, S or ↓ slides. Touch controls are shown on phones.
-
-## Project files
-
-- `server.js` — HTTP app server, room codes, WebSocket relay, round flow and scoring
-- `index.html`, `style.css`, `game.js` — responsive game client
-- `render.yaml` — Render deployment blueprint
-
+- server.js: authoritative movement, collision, fish spawning, matchmaking, and WebSocket updates.
+- game.js: canvas rendering, controls, HUD, and reconnect handling.
+- index.html / style.css: responsive interface.
+- render.yaml: Render deployment Blueprint.

@@ -1,83 +1,54 @@
-const http = require('node:http');
-const fs = require('node:fs');
-const path = require('node:path');
-const crypto = require('node:crypto');
-const root = __dirname, rooms = new Map();
-const MIME = {'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.svg':'image/svg+xml','.json':'application/json'};
-function frame(data) {
-  const body=Buffer.from(typeof data==='string'?data:JSON.stringify(data)); let h;
-  if(body.length<126) h=Buffer.from([129,body.length]);
-  else if(body.length<65536){h=Buffer.alloc(4);h[0]=129;h[1]=126;h.writeUInt16BE(body.length,2);}
-  else {h=Buffer.alloc(10);h[0]=129;h[1]=127;h.writeBigUInt64BE(BigInt(body.length),2);}
-  return Buffer.concat([h,body]);
-}
-function send(p,m){if(!p.dead)p.socket.write(frame(m));}
-function roomOf(p){return p.room&&rooms.get(p.room);}
-function broadcast(r,m,except){if(r)for(const p of r.players.values())if(p!==except)send(p,m);}
-function roster(r){return [...r.players.values()].map(p=>({id:p.id,name:p.name,color:p.color,host:p.id===r.host,ready:p.ready,alive:p.alive,score:p.score,placement:p.placement}));}
-function update(r){broadcast(r,{type:'room',code:r.code,players:roster(r),phase:r.phase,round:r.round,scores:Object.fromEntries([...r.players.values()].map(p=>[p.id,p.score]))});}
-function remove(p){
-  if(p.dead)return;p.dead=true;const r=roomOf(p);
-  if(r){r.players.delete(p.id);if(!r.players.size){clearTimeout(r.startTimer);rooms.delete(r.code);}
-  else {if(r.host===p.id)r.host=r.players.keys().next().value;update(r);}}
-  p.socket.destroy();
-}
-function handle(p,m){
-  let r=roomOf(p);
-  if(m.type==='create'){if(r)return;let code;do{code=crypto.randomBytes(3).toString('hex').toUpperCase();}while(rooms.has(code));r={code,players:new Map(),host:p.id,phase:'lobby',round:1};rooms.set(code,r);join(p,r,m.name);return;}
-  if(m.type==='join'){r=rooms.get(String(m.code||'').toUpperCase());if(!r){send(p,{type:'error',message:'That room code wasn’t found.'});return;}if(r.players.size>=8){send(p,{type:'error',message:'This room is full (8 racers max).'});return;}if(r.phase!=='lobby'){send(p,{type:'error',message:'This race is already in progress.'});return;}join(p,r,m.name);return;}
-  if(!r)return;
-  if(m.type==='ready'&&r.phase==='lobby'){p.ready=!!m.ready;update(r);return;}
-  if(m.type==='start'&&r.phase==='lobby'&&p.id===r.host&&r.players.size>=2&&[...r.players.values()].every(q=>q.ready)){ 
-    r.phase='countdown';for(const q of r.players.values()){q.alive=true;q.placement=undefined;q.survivalBonus=0;q.x=0;q.y=0;q.vx=0;q.vy=0;}
-    update(r);broadcast(r,{type:'start',round:r.round,seed:Date.now()});clearTimeout(r.startTimer);
-    r.startTimer=setTimeout(()=>{if(rooms.has(r.code)){r.phase='race';r.raceStartedAt=Date.now();broadcast(r,{type:'go',round:r.round});update(r);}},3000);return;
+const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
+const ROOT=__dirname,W=7072,H=4526,MAX_PER_OCEAN=10,FISH_COUNT=640,TICK=50,RESPAWN=2600;
+const files=new Map([['/',['index.html','text/html; charset=utf-8']],['/index.html',['index.html','text/html; charset=utf-8']],['/style.css',['style.css','text/css; charset=utf-8']],['/game.js',['game.js','text/javascript; charset=utf-8']]]);
+function frame(op,data=Buffer.alloc(0)){const d=Buffer.isBuffer(data)?data:Buffer.from(data);let h;if(d.length<126)h=Buffer.from([128|op,d.length]);else if(d.length<65536){h=Buffer.alloc(4);h[0]=128|op;h[1]=126;h.writeUInt16BE(d.length,2);}else{h=Buffer.alloc(10);h[0]=128|op;h[1]=127;h.writeBigUInt64BE(BigInt(d.length),2);}return Buffer.concat([h,d]);}
+function send(c,m){if(c.dead||c.socket.destroyed)return;if(c.socket.writableLength>262144)return close(c);c.socket.write(frame(1,JSON.stringify(m)));}
+const palette=['#85e5d0','#ffd166','#ff8f70','#9fa8ff','#c4ec75','#ff9bca','#69c9f0','#e7a76d'];
+const color=()=>palette[Math.floor(Math.random()*palette.length)],wrap=(n,m)=>(n%m+m)%m;
+function delta(a,b,s){return a-b;}
+function radius(m){return Math.min(74,10+Math.sqrt(Math.max(1,m))*1.35);}
+function playerRadius(p,now){return radius(p.mass)*(p.buffs?.giantUntil>now?2.5:1);}
+function effectiveMass(p,now){return p.mass*(p.buffs?.giantUntil>now?2.5:1);}
+function speed(m){return Math.max(150,232-Math.sqrt(Math.max(1,m))*1.8);}
+let nextFish=1;
+function speciesForMass(m){return m<5?'sprat':m<15?'minnow':m<30?'goldfish':m<55?'puffer':m<120?'tuna':m<250?'shark':'whale';}
+function speciesColor(s){return({sprat:'#7bd8cb',minnow:'#85e5d0',goldfish:'#ffbd45',puffer:'#e6cf7a',tuna:'#80b6e2',swordfish:'#69c9f0',sunfish:'#c894ff',shark:'#91aabb',whale:'#78aaa5'})[s]||'#85e5d0';}
+function randomMass(){const roll=Math.random();if(roll<.5)return 2+Math.random()*4;if(roll<.78)return 5+Math.random()*10;if(roll<.90)return 15+Math.random()*15;if(roll<.96)return 30+Math.random()*25;if(roll<.99)return 55+Math.random()*65;if(roll<.998)return 120+Math.random()*130;return 250+Math.random()*250;}
+function fish(){const roll=Math.random();let buff=null,mass,species;if(roll<.025){buff='gold';mass=4+Math.floor(Math.random()*4);species='goldfish';}else if(roll<.05){buff='speed';mass=4+Math.floor(Math.random()*4);species='swordfish';}else if(roll<.075){buff='giant';mass=4+Math.floor(Math.random()*4);species='sunfish';}else{mass=Math.round(randomMass());species=speciesForMass(mass);}const a=Math.random()*Math.PI*2,v=Math.max(12,58-Math.sqrt(mass)*2.2)+Math.random()*12;return{id:nextFish++,species,buff,mass,r:radius(mass),x:Math.random()*W,y:Math.random()*H,vx:Math.cos(a)*v,vy:Math.sin(a)*v,color:speciesColor(species),eaten:0,turn:.5+Math.random()*2.2};}function newOcean(){return{id:crypto.randomBytes(3).toString('hex').toUpperCase(),players:new Map(),fish:Array.from({length:FISH_COUNT},fish),tick:0};}
+const oceans=[];
+function oceanFor(c){let o=oceans.filter(x=>x.players.size<MAX_PER_OCEAN).sort((a,b)=>a.players.size-b.players.size)[0];if(!o){o=newOcean();oceans.push(o);}c.ocean=o;return o;}
+function spawn(o){for(let i=0;i<20;i++){const x=100+Math.random()*(W-200),y=100+Math.random()*(H-200);if([...o.players.values()].every(p=>p.dead||Math.hypot(delta(x,p.x,W),delta(y,p.y,H))>playerRadius(p,Date.now())+100))return{x,y};}return{x:100+Math.random()*(W-200),y:100+Math.random()*(H-200)};}
+function respawn(c,name){const p=c.player,s=spawn(c.ocean);p.name=String(name||'Minnow').replace(/[<>\x00-\x1f]/g,'').trim().slice(0,16)||'Minnow';p.x=s.x;p.y=s.y;p.mass=9;p.r=radius(9);p.buffs={goldUntil:0,speedUntil:0,giantUntil:0};p.speedBuffActive=false;p.vx=p.vy=p.ix=p.iy=0;p.color=color();p.dead=false;p.respawnAt=0;p.protectedUntil=Date.now()+3000;p.eaten=p.eaten||0;p.kos=p.kos||0;}
+function board(o){return[...o.players.values()].filter(p=>!p.dead).sort((a,b)=>b.mass-a.mass).slice(0,6).map(p=>({id:p.id,name:p.name,mass:Math.floor(p.mass),color:p.color}));}
+function snapshot(o,c,now){const me=c.player,others=[],food=[];for(const p of o.players.values())if(p!==me&&!p.dead&&Math.abs(delta(p.x,me.x,W))<1150&&Math.abs(delta(p.y,me.y,H))<850)others.push({id:p.id,name:p.name,x:p.x,y:p.y,vx:p.vx,vy:p.vy,r:p.r,mass:Math.floor(p.mass),color:p.color,buffs:p.buffs,eaten:p.eaten,protected:p.protectedUntil>now});for(const f of o.fish)if(Math.abs(delta(f.x,me.x,W))<1300&&Math.abs(delta(f.y,me.y,H))<950)food.push({id:f.id,x:f.x,y:f.y,vx:f.vx,vy:f.vy,r:f.r,mass:Math.floor(f.mass),species:f.species,buff:f.buff,eaten:f.eaten,color:f.color});const p=me;return{type:'state',ocean:o.id,width:W,height:H,now,self:{id:p.id,name:p.name,x:p.x,y:p.y,vx:p.vx,vy:p.vy,r:p.r,mass:Math.floor(p.mass),color:p.color,buffs:p.buffs,protected:p.protectedUntil>now,eaten:p.eaten,dead:p.dead,respawnIn:p.dead?Math.max(0,p.respawnAt-now):0},players:others,fish:food,board:board(o),online:o.players.size,capacity:MAX_PER_OCEAN};}
+function tick(o,dt,now){
+ o.tick++;
+ for(const f of o.fish){f.turn-=dt;if(f.turn<=0){const a=Math.random()*Math.PI*2,v=Math.max(12,58-Math.sqrt(f.mass)*2.2)+Math.random()*12;f.vx=Math.cos(a)*v;f.vy=Math.sin(a)*v;f.turn=.6+Math.random()*2.4;}f.x+=f.vx*dt;f.y+=f.vy*dt;const margin=f.r*1.6;if(f.x<margin){f.x=margin;f.vx=Math.abs(f.vx);}else if(f.x>W-margin){f.x=W-margin;f.vx=-Math.abs(f.vx);}if(f.y<margin){f.y=margin;f.vy=Math.abs(f.vy);}else if(f.y>H-margin){f.y=H-margin;f.vy=-Math.abs(f.vy);}}
+ const alive=[...o.players.values()].filter(p=>!p.dead);
+ for(const p of alive){
+  const speedBuff=p.buffs?.speedUntil>now;if(speedBuff)p.speedBuffActive=true;else if(p.speedBuffActive){const maxSpeed=speed(p.mass),currentSpeed=Math.hypot(p.vx,p.vy);if(currentSpeed>maxSpeed){p.vx=p.vx/currentSpeed*maxSpeed;p.vy=p.vy/currentSpeed*maxSpeed;}p.speedBuffActive=false;}const n=Math.hypot(p.ix,p.iy)||1,s=speed(p.mass)*(speedBuff?3:1),blend=Math.min(1,dt*(speedBuff?10:7.2));
+  p.vx+=(p.ix/n*s-p.vx)*blend;p.vy+=(p.iy/n*s-p.vy)*blend;const pr=playerRadius(p,now),margin=pr*1.6,nextX=p.x+p.vx*dt,nextY=p.y+p.vy*dt;p.x=Math.max(margin,Math.min(W-margin,nextX));p.y=Math.max(margin,Math.min(H-margin,nextY));if((p.x===margin&&p.vx<0)||(p.x===W-margin&&p.vx>0))p.vx=0;if((p.y===margin&&p.vy<0)||(p.y===H-margin&&p.vy>0))p.vy=0;
+  for(const f of o.fish){
+   if(p.dead)break;
+   const pr=playerRadius(p,now),pm=effectiveMass(p,now),dx=delta(f.x,p.x,W),dy=delta(f.y,p.y,H);if(Math.abs(dx)>pr+f.r||Math.abs(dy)>pr+f.r)continue;
+   if(dx*dx+dy*dy>(pr+f.r*.35)**2)continue;
+   if(pm>f.mass){p.mass+=Math.round(f.mass*.82);p.r=radius(p.mass);p.eaten++;if(f.buff){const until=now+(f.buff==="gold"?5000:f.buff==="speed"?7000:10000);if(f.buff==="gold")p.buffs.goldUntil=until;else if(f.buff==="speed")p.buffs.speedUntil=until;else p.buffs.giantUntil=until;}Object.assign(f,fish());continue;}
+   if(now>=p.protectedUntil&&now>=p.buffs.goldUntil&&f.mass>pm){
+    f.mass+=Math.round(p.mass*.75);f.r=radius(f.mass);f.eaten++;f.buff=null;const nextSpecies=speciesForMass(f.mass);if(nextSpecies!==f.species){f.species=nextSpecies;f.color=speciesColor(nextSpecies);}
+    p.dead=true;p.buffs={goldUntil:0,speedUntil:0,giantUntil:0};p.respawnAt=now+RESPAWN;p.ix=p.iy=0;send(p.client,{type:'eaten',by:f.species,predator:true,respawnIn:RESPAWN});break;
+   }
   }
-  if(m.type==='input'&&r.phase==='race'){
-    const x=Number(m.x),y=Number(m.y),vx=Number(m.vx),vy=Number(m.vy);if(![x,y,vx,vy].every(Number.isFinite))return;
-    p.x=x;p.y=y;p.vx=vx;p.vy=vy;p.alive=m.alive!==false;
-    broadcast(r,{type:'state',id:p.id,name:p.name,color:p.color,x,y,vx,vy,alive:p.alive,grapple:!!m.grapple,anchorX:Number.isFinite(Number(m.anchorX))?Number(m.anchorX):null,anchorY:Number.isFinite(Number(m.anchorY))?Number(m.anchorY):null,slide:!!m.slide,t:Date.now()},p);return;
-  }
-  if(m.type==='eliminated'&&p.alive){
-    p.alive=false;const alive=[...r.players.values()].filter(q=>q.alive);p.placement=alive.length+1;p.survivalBonus=Math.floor(Math.max(0,Date.now()-(r.raceStartedAt||Date.now()))/3000);
-    broadcast(r,{type:'eliminated',id:p.id,reason:m.reason||'The screen left you behind.',placement:p.placement});
-    if(alive.length===0){
-      for(const q of r.players.values()){const placePoints=q.placement===1?10:q.placement===2?4:q.placement===3?2:1;q.score+=placePoints+(q.survivalBonus||0);}
-      r.phase='results';broadcast(r,{type:'results',round:r.round,players:roster(r)});update(r);
-    }return;
-  }
-  if(m.type==='next'&&p.id===r.host&&r.phase==='results'){
-    if(r.round>=3){r.phase='final';broadcast(r,{type:'final',players:roster(r)});update(r);}
-    else {r.round++;r.phase='lobby';for(const q of r.players.values()){q.ready=false;q.alive=true;q.survivalBonus=0;}update(r);}return;
-  }
-  if(m.type==='rematch'&&p.id===r.host&&r.phase==='final'){r.round=1;for(const q of r.players.values()){q.score=0;q.alive=true;q.ready=false;q.placement=undefined;}r.phase='lobby';update(r);}
-}
-const colors=['#ff725e','#5bc0eb','#ffd166','#8bd450','#b28dff','#ff82c3','#62dac5','#ffa64d'];
-function uniqueName(r,name){const base=String(name||'Runner').trim().slice(0,16)||'Runner';const used=new Set([...r.players.values()].map(q=>q.name.toLocaleLowerCase()));if(!used.has(base.toLocaleLowerCase()))return base;for(let i=2;i<=99;i++){const suffix=' '+i,candidate=base.slice(0,16-suffix.length)+suffix;if(!used.has(candidate.toLocaleLowerCase()))return candidate;}return 'Racer '+crypto.randomBytes(2).toString('hex');}
-function join(p,r,name){p.room=r.code;p.name=uniqueName(r,name);p.color=colors[r.players.size%8];p.ready=false;p.alive=true;p.score=0;r.players.set(p.id,p);send(p,{type:'welcome',id:p.id,code:r.code});update(r);}
-function parse(p,ch){
-  p.buffer=Buffer.concat([p.buffer,ch]);
-  while(p.buffer.length>=2){
-    const op=p.buffer[0]&15,b=p.buffer[1];let n=b&127,o=2;
-    if(n===126){if(p.buffer.length<4)return;n=p.buffer.readUInt16BE(2);o=4;}
-    else if(n===127){if(p.buffer.length<10)return;const z=p.buffer.readBigUInt64BE(2);if(z>1000000n)return remove(p);n=Number(z);o=10;}
-    const masked=!!(b&128);if(masked)o+=4;if(p.buffer.length<o+n)return;
-    let d=p.buffer.subarray(o,o+n);if(masked){const k=p.buffer.subarray(o-4,o);d=Buffer.from(d);for(let i=0;i<d.length;i++)d[i]^=k[i%4];}
-    p.buffer=p.buffer.subarray(o+n);if(op===8)return remove(p);
-    if(op===9){p.socket.write(Buffer.concat([Buffer.from([138,n]),d]));continue;}if(op!==1)continue;
-    try{handle(p,JSON.parse(d.toString()));}catch(e){console.error(e);}
-  }
-}
-const server=http.createServer((req,res)=>{
-  const pathname=new URL(req.url,'http://local').pathname;const resolved=path.resolve(root,'.'+(pathname==='/'?'/index.html':decodeURIComponent(pathname)));
-  if(resolved!==root&&!resolved.startsWith(root+path.sep)){res.writeHead(403).end();return;}
-  fs.readFile(resolved,(e,d)=>{if(e){res.writeHead(404).end('Not found');return;}res.writeHead(200,{'Content-Type':MIME[path.extname(resolved)]||'application/octet-stream','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(d);});
-});
-server.on('upgrade',(req,s)=>{
-  const k=req.headers['sec-websocket-key'];if(!k)return s.destroy();
-  const a=crypto.createHash('sha1').update(k+'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
-  s.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: '+a+'\r\n\r\n');
-  const p={socket:s,id:crypto.randomUUID(),buffer:Buffer.alloc(0),dead:false};s.on('data',d=>parse(p,d));s.on('close',()=>remove(p));s.on('error',()=>remove(p));
-});
-const heartbeat=setInterval(()=>{for(const r of rooms.values())for(const p of r.players.values())if(!p.dead)p.socket.write(Buffer.from([137,0]));},25000);heartbeat.unref();
-function listenOn(port){server.once('error',e=>{if(e.code==='EADDRINUSE'&&!process.env.PORT&&port<3010){console.log('Port '+port+' is busy; trying '+(port+1));listenOn(port+1);return;}throw e;});server.listen(port,'0.0.0.0',()=>console.log('Last Lap running at http://localhost:'+port));} listenOn(Number(process.env.PORT||3000));
+ }
+ for(let i=0;i<alive.length;i++)for(let j=i+1;j<alive.length;j++){
+  const a=alive[i],b=alive[j];if(a.dead||b.dead||now<a.protectedUntil||now<b.protectedUntil)continue;
+  const ar=playerRadius(a,now),br=playerRadius(b,now),am=effectiveMass(a,now),bm=effectiveMass(b,now),dx=delta(b.x,a.x,W),dy=delta(b.y,a.y,H),d2=dx*dx+dy*dy,e=am>bm?a:bm>am?b:null;if(!e)continue;
+  const p=e===a?b:a;if(p.buffs?.goldUntil>now)continue;const er=e===a?ar:br,pr=p===a?ar:br,limit=er+pr*.35;if(d2<limit*limit){e.mass+=Math.round(p.mass*.72);e.r=radius(e.mass);e.kos++;e.eaten++;p.dead=true;p.buffs={goldUntil:0,speedUntil:0,giantUntil:0};p.respawnAt=now+RESPAWN;p.ix=p.iy=0;send(p.client,{type:'eaten',by:e.name,respawnIn:RESPAWN});}
+ }
+ for(const p of o.players.values())if(p.dead&&now>=p.respawnAt)respawn(p.client,p.name);
+ if(o.tick%2===0)for(const p of o.players.values())send(p.client,snapshot(o,p.client,now));
+}function close(c){if(c.dead)return;c.dead=true;if(c.ocean&&c.player){c.ocean.players.delete(c.player.id);if(!c.ocean.players.size){const i=oceans.indexOf(c.ocean);if(i>=0)oceans.splice(i,1);}}if(!c.socket.destroyed)c.socket.end(frame(8));}
+function parse(c,chunk){c.buffer=Buffer.concat([c.buffer,chunk]);while(c.buffer.length>=2){const op=c.buffer[0]&15,b=c.buffer[1];let n=b&127,o=2;if(n===126){if(c.buffer.length<4)return;n=c.buffer.readUInt16BE(2);o=4;}else if(n===127){if(c.buffer.length<10)return;const z=c.buffer.readBigUInt64BE(2);if(z>65536n)return close(c);n=Number(z);o=10;}const masked=!!(b&128);if(masked)o+=4;if(n>65536)return close(c);if(c.buffer.length<o+n)return;let d=c.buffer.subarray(o,o+n);if(masked){const k=c.buffer.subarray(o-4,o);d=Buffer.from(d);for(let i=0;i<d.length;i++)d[i]^=k[i%4];}c.buffer=c.buffer.subarray(o+n);if(op===8)return close(c);if(op===9){c.socket.write(frame(10,d));continue;}if(op!==1)continue;let m;try{m=JSON.parse(d.toString());}catch{continue;}if(m.type==='join'&&!c.player){const o1=oceanFor(c),p={id:crypto.randomUUID(),client:c,name:'',x:0,y:0,mass:9,r:radius(9),buffs:{goldUntil:0,speedUntil:0,giantUntil:0},speedBuffActive:false,vx:0,vy:0,ix:0,iy:0,dead:false,eaten:0,kos:0};c.player=p;o1.players.set(p.id,p);respawn(c,m.name);send(c,{type:'welcome',self:p.id,ocean:o1.id,online:o1.players.size,capacity:MAX_PER_OCEAN});for(const x of o1.players.values())send(x.client,snapshot(o1,x.client,Date.now()));}else if(m.type==='input'&&c.player&&Number.isFinite(m.x)&&Number.isFinite(m.y)){const mag=Math.hypot(m.x,m.y);c.player.ix=Math.max(-1,Math.min(1,mag>1?m.x/mag:m.x));c.player.iy=Math.max(-1,Math.min(1,mag>1?m.y/mag:m.y));}else if(m.type==='name'&&c.player){const n=String(m.name||'').replace(/[<>\x00-\x1f]/g,'').trim().slice(0,16);if(n)c.player.name=n;}}}
+const server=http.createServer((req,res)=>{const f=files.get(new URL(req.url,'http://localhost').pathname);if(!f){res.writeHead(404).end('Not found');return;}fs.readFile(path.join(ROOT,f[0]),(e,d)=>{if(e){res.writeHead(500).end('Could not read game files');return;}res.writeHead(200,{'Content-Type':f[1],'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(d);});});
+server.on('upgrade',(req,s,head)=>{if(new URL(req.url,'http://localhost').pathname!=='/play')return s.destroy();const key=req.headers['sec-websocket-key'];if(!key)return s.destroy();const accept=crypto.createHash('sha1').update(key+'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');s.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: '+accept+'\r\n\r\n');const c={socket:s,buffer:Buffer.alloc(0),dead:false,ocean:null,player:null};s.on('data',d=>parse(c,d));s.on('close',()=>close(c));s.on('error',()=>close(c));if(head.length)parse(c,head);});
+setInterval(()=>{const now=Date.now();for(const o of oceans)tick(o,TICK/1000,now);},TICK).unref();
+const port=Number(process.env.PORT||3000);server.listen(port,'0.0.0.0',()=>console.log('Shoal is swimming on '+port));

@@ -1,1 +1,1 @@
-﻿{"name":"last-lap-party-runner","version":"1.0.0","private":true,"description":"A room-code multiplayer shrinking-screen runner party game","scripts":{"start":"node server.js"},"engines":{"node":">=20"}}
+{"name":"shoal-always-open-ocean","version":"0.1.0","private":true,"description":"An always-open multiplayer fish survival game","scripts":{"start":"node server.js"},"engines":{"node":">=20"}}

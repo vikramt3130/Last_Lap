@@ -1,79 +1,54 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <meta name="theme-color" content="#101211">
-  <meta name="description" content="Last Lap is a chaotic room-code party runner. Stay on screen. Don't get left behind.">
-  <title>LAST LAP — Stay on screen.</title>
-  <link rel="stylesheet" href="/style.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#071916">
+<title>SHOAL — The ocean is always open</title>
+<link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <div class="grain"></div>
+<div class="ocean-noise" aria-hidden="true"></div>
+<main id="app">
+  <canvas id="sea" aria-label="A shared ocean game. Move your fish to eat smaller fish and grow."></canvas>
   <header class="topbar">
-    <a class="brand" href="/" aria-label="Last Lap home"><span class="brand-mark">↗</span> LAST LAP</a>
-    <div class="top-right"><span class="live-dot"></span><span id="connection-label">OFFLINE</span><button class="icon-button" id="rules-open" aria-label="How to play">?</button></div>
+    <a class="brand" href="/" aria-label="Shoal home"><span class="brand-mark">◉</span><span>SHOAL</span></a>
+    <div class="connection"><i id="connection-dot"></i><span id="connection-label">READY TO DIVE</span></div>
+    <button id="help-button" class="icon-button" aria-label="How to play">?</button>
   </header>
-  <main>
-    <section id="home-view" class="view home-view">
-      <div class="hero-copy">
-        <div class="eyebrow"><span class="eyebrow-line"></span> THE SCREEN IS GETTING SMALLER</div>
-        <h1>STAY<br><span>ON SCREEN.</span></h1>
-        <p class="hero-desc">Run fast. Swing smart. The leader keeps moving — and the edge is hungry.</p>
-        <div class="hero-stats"><span><b>02—08</b> RACERS</span><i></i><span><b>03</b> ROUNDS</span><i></i><span><b>01</b> LEFT STANDING</span></div>
-      </div>
-      <div class="entry-card">
-        <div class="card-topline"><span>GET IN THE RACE</span><span class="card-serial">LL—01</span></div>
-        <label for="player-name">YOUR CALLSIGN</label>
-        <input id="player-name" maxlength="16" placeholder="e.g. Rocket" autocomplete="nickname">
-        <button id="create-room" class="button button-primary"><span>CREATE A ROOM</span><b>↗</b></button>
-        <div class="divider"><span>OR JOIN YOUR CREW</span></div>
-        <div class="join-row"><input id="room-code-input" maxlength="6" placeholder="ROOM CODE" autocapitalize="characters" autocomplete="off"><button id="join-room" class="button button-quiet" aria-label="Join room">JOIN <span>→</span></button></div>
-        <p id="home-error" class="error-text"></p>
-        <p class="entry-note">No downloads. Share a code. Play from anywhere.</p>
-      </div>
-      <div class="hero-stamp"><span>RUN<br>OR<br>BE RUN</span><b>✳</b></div>
-      <div class="bottom-note">A MULTIPLAYER PARTY RUNNER <span>·</span> BUILT FOR THE LAST SECOND</div>
-    </section>
-
-    <section id="lobby-view" class="view lobby-view hidden">
-      <div class="section-heading"><div><div class="eyebrow"><span class="eyebrow-line"></span> RACE CONTROL</div><h2>THE<br>STARTING LINE.</h2></div><div class="round-pill">ROOM <b id="room-code-display">——</b></div></div>
-      <div class="lobby-grid">
-        <div class="track-card">
-          <div class="track-top"><span>COURSE PREVIEW</span><span>01 / 03</span></div>
-          <div class="track-preview" aria-hidden="true"><div class="preview-sun"></div><div class="preview-cloud cloud-a"></div><div class="preview-cloud cloud-b"></div><div class="preview-track"></div><div class="preview-bar"></div><div class="preview-anchor">✳</div><div class="preview-runner">➜</div><div class="preview-storm"></div><div class="track-label">KEEP MOVING <span>→</span></div></div>
-          <div class="invite-row"><div><small>YOUR ROOM CODE</small><strong id="room-code-large">——</strong></div><button id="copy-invite" class="button button-quiet">COPY INVITE ↗</button></div>
-          <p id="copy-feedback" class="copy-feedback">Send the link to your friends. They can join from any device.</p>
-        </div>
-        <div class="players-card">
-          <div class="players-heading"><span>RACERS</span><span id="player-count">0 / 8</span></div>
-          <div id="players-list" class="players-list"></div>
-          <div class="lobby-footer"><span id="lobby-status">WAITING FOR RACERS…</span><button id="ready-button" class="button button-quiet">I'M READY</button></div>
-          <button id="start-button" class="button button-primary start-button" disabled><span>START THE RACE</span><b>↗</b></button>
-          <p class="min-players">2 racers needed to start · 8 max</p>
-        </div>
-      </div>
-      <button class="text-button leave-button" id="leave-room">← LEAVE ROOM</button>
-    </section>
-
-    <section id="race-view" class="view race-view hidden">
-      <div class="race-head"><a class="brand" href="#" id="race-brand"><span class="brand-mark">↗</span> LAST LAP</a><div class="race-round">ROUND <b id="race-round">01</b> <span>/ 03</span></div><div class="race-players" id="race-live-count">8 RACERS</div></div>
-      <div class="game-frame"><canvas id="game-canvas" aria-label="Last Lap race arena"></canvas><div class="canvas-label top-left"><span class="live-dot"></span> LIVE RACE</div><div class="canvas-label pace-label">PACE <b id="race-pace">145</b></div><div class="canvas-label top-right" id="race-position">—</div><div id="pit-warning" class="pit-warning hidden"><b>GAP AHEAD</b><span id="pit-distance">GAP IN —</span></div>
-        <div id="countdown-overlay" class="countdown-overlay hidden"><span id="countdown-number">GET</span><small id="countdown-caption">RACE STARTING</small></div>
-        <div id="eliminated-overlay" class="center-overlay hidden"><div class="overlay-kicker">OUT OF THE FRAME</div><h2 id="elimination-title">THE EDGE<br>CAUGHT YOU.</h2><p id="elimination-reason">The leader pulled the camera forward. Keep pace to stay in frame.</p></div>
-        <div id="results-overlay" class="center-overlay hidden"><div class="overlay-kicker">ROUND <span id="result-round">01</span> COMPLETE</div><h2 id="result-title">LAST ONE<br>RUNNING.</h2><div id="round-results" class="round-results"></div><button id="next-round" class="button button-primary"><span>BACK TO LOBBY</span><b>↗</b></button></div>
-        <div id="final-overlay" class="center-overlay hidden"><div class="overlay-kicker">THAT'S A WRAP</div><h2 id="final-winner">THE<br>CHAMPION.</h2><div id="final-results" class="round-results"></div><button id="rematch-button" class="button button-primary"><span>RUN IT BACK</span><b>↗</b></button></div>
-      </div>
-      <div class="race-controls"><div class="controls-copy"><span>PACE <b>A / D</b> OR <b>← →</b></span><span>JUMP <b>SPACE</b></span><span>GRAPPLE <b>W</b> OR <b>↑</b></span><span>SLIDE <b>S</b> OR <b>↓</b></span></div><div class="mobile-gesture-hint">SWIPE ← → PACE · ↑ JUMP / HOOK · ↓ SLIDE</div><div class="touch-controls"><button id="touch-left" aria-label="Move left">←</button><button id="touch-jump" aria-label="Jump">↑</button><button id="touch-grapple" aria-label="Grapple">✳</button><button id="touch-slide" aria-label="Slide">↓</button><button id="touch-right" aria-label="Move right">→</button></div><div class="grapple-hint"><span>✳</span> ANCHOR IN RANGE <i id="grapple-indicator"></i></div></div>
-    </section>
-
-    <section id="rules-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="rules-title">
-      <div class="modal-card"><button id="rules-close" class="modal-close" aria-label="Close">×</button><div class="eyebrow"><span class="eyebrow-line"></span> THE PLAYBOOK</div><h2 id="rules-title">HOW TO<br>STAY IN.</h2>
-        <div class="rule-list"><div><b>01</b><p><strong>Build speed.</strong> You run automatically; pace starts low and gradually rises. Hold A/D or ←/→ to adjust speed.</p></div><div><b>02</b><p><strong>Read the track.</strong> Gap widths and hook positions change each round. Some lip-hook gaps have a deeper backup; other gaps have only one hook. Striped walls follow the landing runway; press Space to vault them. Slide under the low beam after the wall for a speed boost.</p></div><div><b>03</b><p><strong>Use your hook.</strong> Tap W or ↑ when a pit hook lights up. On lip-hook gaps, an orange backup may appear deeper in the pit.</p></div><div><b>04</b><p><strong>Slide to stay low.</strong> Hold S or ↓ to slide under the low beams. Fall off the course and you're out.</p></div><div><b>05</b><p><strong>Win the set.</strong> The round continues until every racer is out; the last racer eliminated earns 10 points, then 4, 2, and 1 by placement. Every 3 seconds survived adds 1 bonus point. Highest score after 3 rounds wins.</p></div></div>
-        <button id="rules-done" class="button button-primary"><span>GOT IT</span><b>↗</b></button>
-      </div>
-    </section>
-  </main>
-  <script src="/game.js"></script>
+  <section class="hud hud-left">
+    <div class="mass-card"><span class="eyebrow">YOUR MASS</span><strong id="mass-value">—</strong><div class="mass-meter"><i id="mass-meter"></i></div><small id="growth-copy">Eat to grow</small></div>
+    <div class="stats"><span><b id="fish-count">0</b> FISH EATEN</span><span><b id="ko-count">0</b> BIG FISH ESCAPED</span></div><div id="buff-tracker" class="buff-tracker" aria-live="polite"></div>
+  </section>
+  <section class="ocean-card"><span class="eyebrow">CURRENT OCEAN</span><strong id="ocean-id">—</strong><span id="online-count">0 / 10 SWIMMING</span></section>
+  <aside class="leaderboard"><div class="board-head"><span class="eyebrow">BIGGEST IN THIS OCEAN</span><span id="board-count">LIVE</span></div><ol id="leader-list"></ol></aside>
+  <div class="toast" id="toast" aria-live="polite"></div>
+  <div id="spawn-overlay" class="overlay">
+    <div class="intro-card">
+      <div class="eyebrow"><i class="eyebrow-line"></i> THE OCEAN IS ALWAYS OPEN</div>
+      <h1>GROW<br><em>OR GET</em><br>GROWN.</h1>
+      <p>Every fish shows its mass. Eat fish with a lower mass than yours and avoid fish with a higher mass. Equal mass means neither fish can gulp the other. The sea never closes.</p>
+      <label class="name-label" for="fish-name">YOUR FISH NAME</label>
+      <input id="fish-name" maxlength="16" placeholder="Minnow" autocomplete="nickname">
+      <button id="dive-button" class="primary-button"><span>DIVE IN</span><b>↗</b></button>
+      <small id="join-hint">NO ROOM CODE · UP TO 10 FISH PER OCEAN</small>
+    </div>
+    <div class="intro-aside"><span>01 / ALWAYS ON</span><span>02 / GET BIGGER</span><span>03 / KEEP SWIMMING</span></div>
+  </div>
+  <div id="eaten-overlay" class="eaten-overlay hidden"><span class="eyebrow">THE SEA IS HUNGRY</span><strong>YOU GOT<br>GULPED.</strong><p id="respawn-copy">You’ll be back in a moment.</p></div>
+  <div class="bottom-hint"><span>WASD / ARROWS TO SWIM</span><i>·</i><span>GREEN MASS = EDIBLE · CORAL = DANGER</span><i>·</i><span>STAY CLEAR OF BIGGER ONES</span></div>
+  <div class="joystick" id="joystick" aria-label="Touch movement control"><span></span><i></i></div>
+  <div id="connection-overlay" class="help-modal connection-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="connection-title" aria-live="assertive">
+    <div class="help-card connection-card"><div class="eyebrow">OCEAN CONNECTION LOST</div><h2 id="connection-title">THE SEA<br>WENT QUIET.</h2><p id="connection-copy">Your connection was interrupted. Reconnect to return as a small fish.</p><button id="reconnect-button" class="primary-button"><span>RECONNECT</span><b>↗</b></button></div>
+  </div>  <div id="help-modal" class="help-modal hidden">
+    <div class="help-card"><button id="help-close" class="icon-button" aria-label="Close">×</button><div class="eyebrow">THE FOOD CHAIN</div><h2>SMALLER FISH.<br>BIGGER RISKS.</h2>
+      <p>The number above each fish is its mass. Eat lower-mass fish and avoid higher-mass fish. Special glowing fish grant Gold Shield (ungulpable for 5s), Sword Speed (3× swim for 7s, but still vulnerable to bigger fish), or Giant Gulp (2.5× size and gulp power for 10s). Buff timers appear under your mass. Evolutions happen at mass 50 (Goldfish), 200 (Puffer), 500 (Baby Shark), 1,000 (Shark), and 2,000 (Whale).</p>
+      <p>Getting eaten resets your growth, but you return after a short pause with temporary protection. There’s no match timer and no final round.</p>
+      <p>Use WASD or arrow keys on desktop. On touch screens, drag the joystick. The ocean has visible edges. Turn around when you reach one.</p>
+      <button id="help-done" class="primary-button"><span>BACK TO THE SEA</span><b>↗</b></button>
+    </div>
+  </div>
+</main>
+<script src="/game.js"></script>
 </body>
 </html>
