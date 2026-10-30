@@ -1,0 +1,9 @@
+﻿services:
+  - type: web
+    name: last-lap
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /
+    autoDeployTrigger: commit

@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="theme-color" content="#101211">
+  <meta name="description" content="Last Lap is a chaotic room-code party runner. Stay on screen. Don't get left behind.">
+  <title>LAST LAP — Stay on screen.</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="grain"></div>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Last Lap home"><span class="brand-mark">↗</span> LAST LAP</a>
+    <div class="top-right"><span class="live-dot"></span><span id="connection-label">OFFLINE</span><button class="icon-button" id="rules-open" aria-label="How to play">?</button></div>
+  </header>
+  <main>
+    <section id="home-view" class="view home-view">
+      <div class="hero-copy">
+        <div class="eyebrow"><span class="eyebrow-line"></span> THE SCREEN IS GETTING SMALLER</div>
+        <h1>STAY<br><span>ON SCREEN.</span></h1>
+        <p class="hero-desc">Run fast. Swing smart. The leader keeps moving — and the edge is hungry.</p>
+        <div class="hero-stats"><span><b>02—08</b> RACERS</span><i></i><span><b>03</b> ROUNDS</span><i></i><span><b>01</b> LEFT STANDING</span></div>
+      </div>
+      <div class="entry-card">
+        <div class="card-topline"><span>GET IN THE RACE</span><span class="card-serial">LL—01</span></div>
+        <label for="player-name">YOUR CALLSIGN</label>
+        <input id="player-name" maxlength="16" placeholder="e.g. Rocket" autocomplete="nickname">
+        <button id="create-room" class="button button-primary"><span>CREATE A ROOM</span><b>↗</b></button>
+        <div class="divider"><span>OR JOIN YOUR CREW</span></div>
+        <div class="join-row"><input id="room-code-input" maxlength="6" placeholder="ROOM CODE" autocapitalize="characters" autocomplete="off"><button id="join-room" class="button button-quiet" aria-label="Join room">JOIN <span>→</span></button></div>
+        <p id="home-error" class="error-text"></p>
+        <p class="entry-note">No downloads. Share a code. Play from anywhere.</p>
+      </div>
+      <div class="hero-stamp"><span>RUN<br>OR<br>BE RUN</span><b>✳</b></div>
+      <div class="bottom-note">A MULTIPLAYER PARTY RUNNER <span>·</span> BUILT FOR THE LAST SECOND</div>
+    </section>
+
+    <section id="lobby-view" class="view lobby-view hidden">
+      <div class="section-heading"><div><div class="eyebrow"><span class="eyebrow-line"></span> RACE CONTROL</div><h2>THE<br>STARTING LINE.</h2></div><div class="round-pill">ROOM <b id="room-code-display">——</b></div></div>
+      <div class="lobby-grid">
+        <div class="track-card">
+          <div class="track-top"><span>COURSE PREVIEW</span><span>01 / 03</span></div>
+          <div class="track-preview" aria-hidden="true"><div class="preview-sun"></div><div class="preview-cloud cloud-a"></div><div class="preview-cloud cloud-b"></div><div class="preview-track"></div><div class="preview-bar"></div><div class="preview-anchor">✳</div><div class="preview-runner">➜</div><div class="preview-storm"></div><div class="track-label">KEEP MOVING <span>→</span></div></div>
+          <div class="invite-row"><div><small>YOUR ROOM CODE</small><strong id="room-code-large">——</strong></div><button id="copy-invite" class="button button-quiet">COPY INVITE ↗</button></div>
+          <p id="copy-feedback" class="copy-feedback">Send the link to your friends. They can join from any device.</p>
+        </div>
+        <div class="players-card">
+          <div class="players-heading"><span>RACERS</span><span id="player-count">0 / 8</span></div>
+          <div id="players-list" class="players-list"></div>
+          <div class="lobby-footer"><span id="lobby-status">WAITING FOR RACERS…</span><button id="ready-button" class="button button-quiet">I'M READY</button></div>
+          <button id="start-button" class="button button-primary start-button" disabled><span>START THE RACE</span><b>↗</b></button>
+          <p class="min-players">2 racers needed to start · 8 max</p>
+        </div>
+      </div>
+      <button class="text-button leave-button" id="leave-room">← LEAVE ROOM</button>
+    </section>
+
+    <section id="race-view" class="view race-view hidden">
+      <div class="race-head"><a class="brand" href="#" id="race-brand"><span class="brand-mark">↗</span> LAST LAP</a><div class="race-round">ROUND <b id="race-round">01</b> <span>/ 03</span></div><div class="race-players" id="race-live-count">8 RACERS</div></div>
+      <div class="game-frame"><canvas id="game-canvas" aria-label="Last Lap race arena"></canvas><div class="canvas-label top-left"><span class="live-dot"></span> LIVE RACE</div><div class="canvas-label pace-label">PACE <b id="race-pace">145</b></div><div class="canvas-label top-right" id="race-position">—</div><div id="pit-warning" class="pit-warning hidden"><b>GAP AHEAD</b><span id="pit-distance">GAP IN —</span></div>
+        <div id="countdown-overlay" class="countdown-overlay hidden"><span id="countdown-number">GET</span><small id="countdown-caption">RACE STARTING</small></div>
+        <div id="eliminated-overlay" class="center-overlay hidden"><div class="overlay-kicker">OUT OF THE FRAME</div><h2 id="elimination-title">THE EDGE<br>CAUGHT YOU.</h2><p id="elimination-reason">The leader pulled the camera forward. Keep pace to stay in frame.</p></div>
+        <div id="results-overlay" class="center-overlay hidden"><div class="overlay-kicker">ROUND <span id="result-round">01</span> COMPLETE</div><h2 id="result-title">LAST ONE<br>RUNNING.</h2><div id="round-results" class="round-results"></div><button id="next-round" class="button button-primary"><span>BACK TO LOBBY</span><b>↗</b></button></div>
+        <div id="final-overlay" class="center-overlay hidden"><div class="overlay-kicker">THAT'S A WRAP</div><h2 id="final-winner">THE<br>CHAMPION.</h2><div id="final-results" class="round-results"></div><button id="rematch-button" class="button button-primary"><span>RUN IT BACK</span><b>↗</b></button></div>
+      </div>
+      <div class="race-controls"><div class="controls-copy"><span>PACE <b>A / D</b> OR <b>← →</b></span><span>JUMP <b>SPACE</b></span><span>GRAPPLE <b>W</b> OR <b>↑</b></span><span>SLIDE <b>S</b> OR <b>↓</b></span></div><div class="mobile-gesture-hint">SWIPE ← → PACE · ↑ JUMP / HOOK · ↓ SLIDE</div><div class="touch-controls"><button id="touch-left" aria-label="Move left">←</button><button id="touch-jump" aria-label="Jump">↑</button><button id="touch-grapple" aria-label="Grapple">✳</button><button id="touch-slide" aria-label="Slide">↓</button><button id="touch-right" aria-label="Move right">→</button></div><div class="grapple-hint"><span>✳</span> ANCHOR IN RANGE <i id="grapple-indicator"></i></div></div>
+    </section>
+
+    <section id="rules-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="rules-title">
+      <div class="modal-card"><button id="rules-close" class="modal-close" aria-label="Close">×</button><div class="eyebrow"><span class="eyebrow-line"></span> THE PLAYBOOK</div><h2 id="rules-title">HOW TO<br>STAY IN.</h2>
+        <div class="rule-list"><div><b>01</b><p><strong>Build speed.</strong> You run automatically; pace starts low and gradually rises. Hold A/D or ←/→ to adjust speed.</p></div><div><b>02</b><p><strong>Read the track.</strong> Gap widths and hook positions change each round. Some lip-hook gaps have a deeper backup; other gaps have only one hook. Striped walls follow the landing runway; press Space to vault them. Slide under the low beam after the wall for a speed boost.</p></div><div><b>03</b><p><strong>Use your hook.</strong> Tap W or ↑ when a pit hook lights up. On lip-hook gaps, an orange backup may appear deeper in the pit.</p></div><div><b>04</b><p><strong>Slide to stay low.</strong> Hold S or ↓ to slide under the low beams. Fall off the course and you're out.</p></div><div><b>05</b><p><strong>Win the set.</strong> The round continues until every racer is out; the last racer eliminated earns 10 points, then 4, 2, and 1 by placement. Every 3 seconds survived adds 1 bonus point. Highest score after 3 rounds wins.</p></div></div>
+        <button id="rules-done" class="button button-primary"><span>GOT IT</span><b>↗</b></button>
+      </div>
+    </section>
+  </main>
+  <script src="/game.js"></script>
+</body>
+</html>
